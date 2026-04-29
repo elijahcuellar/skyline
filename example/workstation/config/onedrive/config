@@ -1,0 +1,8 @@
+# https://github.com/abraunegg/onedrive/blob/master/docs/usage.md
+
+notify_file_actions = "true" 
+use_recycle_bin = "true"
+display_manager_integration = "true"
+force_session_upload = "true"
+delay_inotify_processing = "true"
+inotify_delay = "5"

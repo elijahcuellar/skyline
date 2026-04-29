@@ -1,0 +1,88 @@
+// Zed Editor Configuration
+// For more information, see: https://zed.dev/docs/configuring-zed
+//
+// To view default settings: Run `zed: open default settings` from command palette
+// To customize: Use `zed: open settings` (Cmd/Ctrl+Shift+P)
+
+{
+  // --- Custom Extensions ---
+  "auto_install_extensions": {
+    "log": true,
+    "mcp-server-github": true,
+    "beanseeds-pro": true,
+    "just": true,
+  },
+
+  // --- Font Configuration ---
+  "ui_font_family": ".ZedSans",
+  "ui_font_size": 16,
+
+  "buffer_font_family": "FiraCode Nerd Font",
+  "buffer_font_size": 14.8,
+  "buffer_line_height": "standard",
+
+  // --- Terminal Configuration ---
+  "terminal": {
+    "font_family": "FiraCode Nerd Font",
+    "font_size": 14.8,
+    "line_height": "standard",
+  },
+
+  // --- Theme Configuration ---
+  "theme": {
+    "mode": "dark",
+    "light": "One Light",
+    "dark": "Beanseeds Pro",
+  },
+
+  // --- Telemetry ---
+  "telemetry": {
+    "diagnostics": true,
+    "metrics": false,
+  },
+
+  // --- AI/Agent Configuration ---
+  "edit_predictions": {
+    "provider": "copilot",
+  },
+
+  "agent": {
+    "default_profile": "write",
+    "inline_assistant_model": {
+      "provider": "copilot_chat",
+      "model": "gpt-5-mini",
+      "enable_thinking": false,
+    },
+    "default_model": {
+      "effort": "high",
+      "provider": "copilot_chat",
+      "model": "gpt-5-mini",
+      "enable_thinking": false,
+    },
+  },
+
+  // --- Code Analysis & Hints ---
+  "diagnostics": {
+    "inline": {
+      "enabled": true,
+    },
+  },
+
+  "inlay_hints": {
+    "enabled": true,
+  },
+
+  // --- UI Customization ---
+  "project_panel": {
+    "auto_fold_dirs": false,
+    "indent_guides": {
+      "show": "never",
+    },
+  },
+
+  "gutter": {
+    "min_line_number_digits": 0,
+  },
+
+  "diff_view_style": "unified",
+}

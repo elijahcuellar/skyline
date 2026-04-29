@@ -1,0 +1,67 @@
+dnf:
+  execution_order: [remove, install]
+
+  remove:
+    packages:
+      - firefox
+      - gnome-boxes
+      - gnome-calendar
+      - gnome-contacts
+      - gnome-connections
+      - gnome-maps
+      - gnome-tour
+      - gnome-weather
+      - "libreoffice*"
+
+  install:
+    execution_order: [repositories, gpg_keys, packages]
+    repositories:
+      - https://cli.github.com/packages/rpm/gh-cli.repo
+      - https://nvidia.github.io/libnvidia-container/stable/rpm/nvidia-container-toolkit.repo
+    gpg_keys:
+      - https://nvidia.github.io/libnvidia-container/gpgkey
+    packages:
+      - "https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-44.noarch.rpm"
+      - "https://mirrors.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-44.noarch.rpm"
+      - akmod-nvidia
+      - xorg-x11-drv-nvidia-cuda
+      - nvidia-container-toolkit
+      - gh
+      - git
+      - bat
+      - just
+      - onedrive
+      - fira-code-fonts
+
+flatpak:
+  repositories:
+    - https://dl.flathub.org/repo/flathub.flatpakrepo
+  apps:
+    - org.mozilla.firefox
+    - org.gnome.gitlab.somas.Apostrophe
+    - com.mattjakeman.ExtensionManager
+
+files:
+  - source: ./config/dnf.conf
+    destination: /etc/dnf/dnf.conf
+  - source: ./config/onedrive/config
+    destination: ~/.config/onedrive/config
+  - source: ./config/zed/settings.json
+    destination: ~/.config/zed/settings.json
+
+bash:
+  execution_order: [exec, scripts]
+  exec:
+    - "systemctl --user enable onedrive.service"
+    - "loginctl enable-linger $USER"
+    - "sudo dnf autoremove -y"
+  scripts:
+    - https://zed.dev/install.sh
+    - https://astral.sh/uv/install.sh
+    - ./scripts/secure-boot.sh
+
+execution_order:
+  - files
+  - dnf
+  - flatpak
+  - bash
