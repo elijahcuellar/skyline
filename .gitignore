@@ -16,5 +16,8 @@
 # ...even if they are in subdirectories
 !*/
 
-# allow top level directories
+# allow examples
 !example/**
+
+# allow embedded schema
+!*.schema.json

@@ -1,0 +1,136 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/elijahcuellar/skyline/main/skyline/install.schema.json",
+  "title": "install.yaml schema",
+  "description": "Top-level schema for install.yaml",
+  "type": "object",
+  "properties": {
+    "dnf": {
+      "type": "object",
+      "description": "DNF operations and order",
+      "properties": {
+        "execution_order": {
+          "type": "array",
+          "description": "Order of DNF phases",
+          "items": {
+            "type": "string",
+            "enum": ["remove", "assert", "install"]
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "remove": {
+          "type": "object",
+          "description": "Packages to remove",
+          "properties": {
+            "packages": { "$ref": "#/$defs/stringArray" }
+          },
+          "required": ["packages"],
+          "additionalProperties": false
+        },
+        "assert": {
+          "type": "object",
+          "description": "Packages required to exist",
+          "properties": {
+            "packages": { "$ref": "#/$defs/stringArray" }
+          },
+          "required": ["packages"],
+          "additionalProperties": false
+        },
+        "install": {
+          "type": "object",
+          "description": "DNF install substeps",
+          "properties": {
+            "execution_order": {
+              "type": "array",
+              "description": "Order for install substeps",
+              "items": {
+                "type": "string",
+                "enum": ["repositories", "gpg_keys", "copr", "packages"]
+              },
+              "minItems": 1,
+              "uniqueItems": true
+            },
+            "repositories": { "$ref": "#/$defs/stringArray" },
+            "gpg_keys": { "$ref": "#/$defs/stringArray" },
+            "copr": { "$ref": "#/$defs/stringArray" },
+            "packages": { "$ref": "#/$defs/stringArray" }
+          },
+          "required": ["execution_order"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["execution_order"],
+      "additionalProperties": false
+    },
+    "flatpak": {
+      "type": "object",
+      "description": "Flatpak repos and apps",
+      "properties": {
+        "repositories": { "$ref": "#/$defs/stringArray" },
+        "apps": { "$ref": "#/$defs/stringArray" }
+      },
+      "additionalProperties": false
+    },
+    "files": {
+      "type": "array",
+      "description": "List of file mappings (source → destination)",
+      "items": { "$ref": "#/$defs/filesItem" }
+    },
+    "bash": {
+      "type": "object",
+      "description": "Bash commands and scripts",
+      "properties": {
+        "execution_order": {
+          "type": "array",
+          "description": "Order for bash steps",
+          "items": {
+            "type": "string",
+            "enum": ["exec", "scripts"]
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "exec": { "$ref": "#/$defs/stringArray" },
+        "scripts": { "$ref": "#/$defs/stringArray" }
+      },
+      "required": ["execution_order"],
+      "additionalProperties": false
+    },
+    "execution_order": {
+      "type": "array",
+      "description": "Top-level section execution order",
+      "items": {
+        "type": "string",
+        "enum": ["files", "dnf", "flatpak", "bash"]
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    }
+  },
+  "required": ["execution_order"],
+  "additionalProperties": false,
+  "$defs": {
+    "stringArray": {
+      "type": "array",
+      "description": "Array of strings",
+      "items": { "type": "string" }
+    },
+    "filesItem": {
+      "type": "object",
+      "description": "Single file mapping",
+      "properties": {
+        "source": {
+          "type": "string",
+          "description": "Source path or URL"
+        },
+        "destination": {
+          "type": "string",
+          "description": "Target path"
+        }
+      },
+      "required": ["source", "destination"],
+      "additionalProperties": false
+    }
+  }
+}
