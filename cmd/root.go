@@ -15,7 +15,6 @@ import (
 
 var (
 	cfgFile string
-	tui     bool
 )
 
 var rootCmd = &cobra.Command{
@@ -59,16 +58,6 @@ var rootCmd = &cobra.Command{
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Minute)
 		defer cancel()
 
-		// Run interactive TUI if requested
-		if tui {
-			if err := installer.RunTUI(inst, ctx); err != nil {
-				return fmt.Errorf("apply failed: %w", err)
-			}
-			// Success
-			fmt.Println("Done — configuration applied successfully.")
-			return nil
-		}
-
 		// Apply non-interactive
 		if err := inst.Apply(ctx); err != nil {
 			return fmt.Errorf("apply failed: %w", err)
@@ -81,9 +70,6 @@ var rootCmd = &cobra.Command{
 
 func init() {
 	rootCmd.PersistentFlags().StringVarP(&cfgFile, "file", "f", "", "path to install.yaml (default ./install.yaml)")
-	// Enable interactive TUI (streams progress).
-	rootCmd.PersistentFlags().BoolVarP(&tui, "tui", "t", false, "run interactive TUI")
-	// TODO: add future flags
 }
 
 // Execute root command.

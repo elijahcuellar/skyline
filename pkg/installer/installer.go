@@ -10,11 +10,10 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	yaml "github.com/goccy/go-yaml"
-
-	model "github.com/elijahcuellar/skyline/pkg/installer/model"
 )
 
 // Centralized default orders
@@ -74,12 +73,19 @@ type Installer struct {
 	cfg  *Config
 	home string
 	Out  io.Writer
-	// Emitter receives structured Step events during installation. Callers (for
-	// example the TUI) can provide an implementation to render richer UI.
-	Emitter model.StepEmitter
 	// Confirm optionally asks the user to confirm an action.
 	// Return (true, nil) to proceed, (false, nil) to skip.
 	Confirm func(message string) (bool, error)
+}
+
+// stepID is a simple internal step identifier type used while running steps.
+type stepID string
+
+var stepCounter atomic.Uint64
+
+func newStepID() stepID {
+	n := stepCounter.Add(1)
+	return stepID(fmt.Sprintf("step-%d", n))
 }
 
 // NewFromBytes loads YAML bytes into an Installer.
@@ -90,12 +96,10 @@ func NewFromBytes(bts []byte) (*Installer, error) {
 	}
 	home, _ := os.UserHomeDir()
 
-	// Create installer with defaults and noop emitter.
 	inst := &Installer{
-		cfg:     &cfg,
-		home:    home,
-		Out:     os.Stdout,
-		Emitter: model.NoopStepEmitter{},
+		cfg:  &cfg,
+		home: home,
+		Out:  os.Stdout,
 		// Default Confirm proceeds; callers may override.
 		Confirm: func(message string) (bool, error) { return true, nil },
 	}
@@ -166,8 +170,8 @@ func (i *Installer) applyFiles(ctx context.Context) error {
 		src := f.Source
 		dst := expandHome(f.Destination, i.home)
 		op := fmt.Sprintf("copy %s → %s", src, dst)
-		if err := i.runWithStep(ctx, op, func(stepID model.StepID) error {
-			return i.copySourceToDestination(ctx, stepID, src, dst)
+		if err := i.runWithStep(ctx, op, func(sid stepID) error {
+			return i.copySourceToDestination(ctx, sid, src, dst)
 		}); err != nil {
 			return fmt.Errorf("copy %s: %w", src, err)
 		}
@@ -175,7 +179,7 @@ func (i *Installer) applyFiles(ctx context.Context) error {
 	return nil
 }
 
-func (i *Installer) copySourceToDestination(ctx context.Context, stepID model.StepID, source, dest string) error {
+func (i *Installer) copySourceToDestination(ctx context.Context, _ stepID, source, dest string) error {
 	// Determine if source is URL or local
 	var reader io.ReadCloser
 	src := strings.TrimSpace(source)
@@ -234,9 +238,8 @@ func (i *Installer) copySourceToDestination(ctx context.Context, stepID model.St
 		}
 	}()
 
-	// Copy in a loop so we can report progress events.
+	// Copy in a loop.
 	buf := make([]byte, 32*1024)
-	var copied int64 = 0
 	for {
 		n, rerr := reader.Read(buf)
 		if n > 0 {
@@ -246,17 +249,6 @@ func (i *Installer) copySourceToDestination(ctx context.Context, stepID model.St
 			}
 			if wn != n {
 				return fmt.Errorf("short write")
-			}
-			copied += int64(n)
-			// Emit a structured progress event for subscribers (TUI) to render progress bars.
-			if i.Emitter != nil {
-				i.Emitter.Progress(model.StepProgress{
-					ID:        stepID,
-					Completed: copied,
-					Total:     total,
-					UpdatedAt: time.Now(),
-					Message:   fmt.Sprintf("copy %s → %s", source, dest),
-				})
 			}
 		}
 		if rerr != nil {
@@ -275,6 +267,7 @@ func (i *Installer) copySourceToDestination(ctx context.Context, stepID model.St
 	if err := os.Rename(tmp, dest); err != nil {
 		return fmt.Errorf("rename tmp: %w", err)
 	}
+	_ = total // keep variable referenced if needed later
 	return nil
 }
 
@@ -645,11 +638,10 @@ func (r *ringBuffer) Bytes() []byte {
 }
 
 // runCommandWithOutput runs cmd and streams its output to the installer's Out.
-// It also emits StepStart/StepEnd events via runWithStep so UIs can observe progress.
 // Additionally it captures the last N bytes of output in a bounded buffer and
 // appends it to the returned error when the command fails.
 func (i *Installer) runCommandWithOutput(ctx context.Context, op string, cmd *exec.Cmd) error {
-	return i.runWithStep(ctx, op, func(stepID model.StepID) error {
+	return i.runWithStep(ctx, op, func(_ stepID) error {
 		// Create pipes for stdout and stderr so we can stream and capture last N bytes.
 		stdout, err := cmd.StdoutPipe()
 		if err != nil {
@@ -707,26 +699,12 @@ func (i *Installer) runCommandWithOutput(ctx context.Context, op string, cmd *ex
 	})
 }
 
-// runWithStep runs fn associated with a high-level step, emitting Start/End events
-// to the installer's Emitter and printing lightweight lines to Out. This replaces
-// the previous Bubble Tea per-step spinner approach and keeps the core package
-// free of UI dependencies. The TUI can subscribe to Emitter to render spinners.
-func (i *Installer) runWithStep(ctx context.Context, message string, fn func(id model.StepID) error) error {
+// runWithStep runs fn associated with a high-level step and prints concise
+// status lines to the installer's output writer.
+func (i *Installer) runWithStep(ctx context.Context, message string, fn func(id stepID) error) error {
 	type result struct{ err error }
 
-	stepID := model.NewStepID()
-	start := model.StepStart{
-		ID:         stepID,
-		ParentID:   model.StepID(""),
-		Name:       message,
-		Kind:       model.StepKind(""),
-		StartedAt:  time.Now(),
-		TotalBytes: -1,
-		Meta:       nil,
-	}
-	if i.Emitter != nil {
-		i.Emitter.Start(start)
-	}
+	stepID := newStepID()
 	if i.Out != nil {
 		_, _ = fmt.Fprintln(i.Out, message)
 	}
@@ -744,28 +722,14 @@ func (i *Installer) runWithStep(ctx context.Context, message string, fn func(id 
 		res = result{err: ctx.Err()}
 	}
 
-	end := model.StepEnd{
-		ID:        stepID,
-		StartedAt: start.StartedAt,
-		EndedAt:   time.Now(),
-	}
 	if res.err == nil {
-		end.Status = model.StepStatusSuccess
-		end.Err = nil
-		end.ErrString = ""
 		if i.Out != nil {
-			_, _ = fmt.Fprintf(i.Out, "✓ %s (%s)\n", message, time.Since(start.StartedAt).Round(time.Second))
+			_, _ = fmt.Fprintf(i.Out, "✓ %s (%s)\n", message, time.Since(time.Now()).Round(time.Second))
 		}
 	} else {
-		end.Status = model.StepStatusFailed
-		end.Err = res.err
-		end.ErrString = fmt.Sprintf("%v", res.err)
 		if i.Out != nil {
-			_, _ = fmt.Fprintf(i.Out, "✗ %s (%s) — %v\n", message, time.Since(start.StartedAt).Round(time.Second), res.err)
+			_, _ = fmt.Fprintf(i.Out, "✗ %s (%s) — %v\n", message, time.Since(time.Now()).Round(time.Second), res.err)
 		}
-	}
-	if i.Emitter != nil {
-		i.Emitter.End(end)
 	}
 	return res.err
 }
